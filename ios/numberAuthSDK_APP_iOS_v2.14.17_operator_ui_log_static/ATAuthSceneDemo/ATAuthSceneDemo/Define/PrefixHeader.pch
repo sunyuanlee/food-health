@@ -1,0 +1,21 @@
+//
+//  PrefixHeader.pch
+//  ATAuthSceneDemo
+//
+//  Created by 刘超的MacBook on 2020/8/5.
+//  Copyright © 2020 刘超的MacBook. All rights reserved.
+//
+
+#ifndef PrefixHeader_pch
+#define PrefixHeader_pch
+
+#import "PNSBaseViewController.h"
+#import "Masonry.h"
+#import "MBProgressHUD.h"
+#import <ATAuthSDK/ATAuthSDK.h>
+#import "PNSHttpsManager.h"
+
+#define PNSToast(view, str, duration) ({ MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:(view) animated:YES]; hud.mode = MBProgressHUDModeText; hud.detailsLabel.font = [UIFont boldSystemFontOfSize:14.f]; hud.detailsLabel.text = (str); [hud hideAnimated:YES afterDelay:(duration)]; })
+
+#define PNSATAUTHSDKINFO <# 请填写客户秘钥，从控制台上可复制 #>
+#endif /* PrefixHeader_pch */
