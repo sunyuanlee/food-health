@@ -1,4 +1,4 @@
-package com.foodhealth.app
+package com.foodhealth.smart.app
 
 import io.flutter.embedding.android.FlutterActivity
 

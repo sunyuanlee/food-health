@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/data/analysis_repository.dart';
 import '../../core/providers/food_provider.dart';
 import '../../core/router/app_router.dart';
-import '../../core/data/mock_food_data.dart';
-import '../../models/ingredient_model.dart';
 
 class ScanPage extends ConsumerStatefulWidget {
   const ScanPage({super.key});
@@ -22,10 +20,6 @@ class _ScanPageState extends ConsumerState<ScanPage>
   bool _isScanning = false;
   bool _torchOn = false;
   List<String> _detectedItems = [];
-
-  CameraController? _cameraController;
-  bool _cameraReady = false;
-  String? _cameraError;
 
   late final AnimationController _scanLineCtrl;
   late final Animation<double> _scanLineAnim;
@@ -41,40 +35,13 @@ class _ScanPageState extends ConsumerState<ScanPage>
       parent: _scanLineCtrl,
       curve: Curves.easeInOut,
     );
-    _initCamera();
-  }
-
-  Future<void> _initCamera() async {
-    try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        setState(() => _cameraError = '未找到可用摄像头');
-        return;
-      }
-      final back = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
-      );
-      final controller = CameraController(
-        back,
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      await controller.initialize();
-      if (!mounted) return;
-      setState(() {
-        _cameraController = controller;
-        _cameraReady = true;
-      });
-    } catch (e) {
-      setState(() => _cameraError = '摄像头初始化失败: $e');
-    }
+    // 进入扫描页时自动唤起系统相机
+    WidgetsBinding.instance.addPostFrameCallback((_) => _takePhoto());
   }
 
   @override
   void dispose() {
     _scanLineCtrl.dispose();
-    _cameraController?.dispose();
     super.dispose();
   }
 
@@ -82,68 +49,79 @@ class _ScanPageState extends ConsumerState<ScanPage>
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null && mounted) {
-      _startMockAnalysis();
+      await _startAnalysis(image.path);
     }
   }
 
   Future<void> _takePhoto() async {
-    if (_cameraReady && _cameraController != null) {
-      try {
-        await _cameraController!.takePicture();
-      } catch (_) {}
-      _startMockAnalysis();
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.camera,
+      preferredCameraDevice: CameraDevice.rear,
+    );
+    if (!mounted) return;
+    if (image != null) {
+      await _startAnalysis(image.path);
     } else {
-      // 降级：调起系统相机
-      final picker = ImagePicker();
-      final image = await picker.pickImage(source: ImageSource.camera);
-      if (image != null && mounted) _startMockAnalysis();
+      context.go(AppRoutes.home);
     }
   }
 
   Future<void> _toggleTorch() async {
-    if (_cameraReady && _cameraController != null) {
-      final next = !_torchOn;
-      await _cameraController!.setFlashMode(
-        next ? FlashMode.torch : FlashMode.off,
-      );
-      setState(() => _torchOn = next);
-    }
+    setState(() => _torchOn = !_torchOn);
   }
 
-  void _startMockAnalysis() {
+  /// 真实调用后端 AI 分析接口
+  Future<void> _startAnalysis(String imagePath) async {
     setState(() {
       _isScanning = true;
       _detectedItems = [];
     });
 
-    // 模拟逐步识别成分
-    final mockItems = ['生牛乳 (>80%)', '乳清蛋白粉', '白砂糖', '赤藓糖醇', '麦芽糊精', '乳酸菌'];
+    // 开始动画模拟进度（给用户视觉反馈）
+    final progressItems = ['正在识别配料表...', '分析成分风险...', '结合健康目标评分...'];
     int i = 0;
-    Timer.periodic(const Duration(milliseconds: 400), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (i < mockItems.length) {
-        setState(() => _detectedItems.add(mockItems[i]));
+    final progressTimer = Timer.periodic(const Duration(milliseconds: 800), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (i < progressItems.length) {
+        setState(() => _detectedItems.add(progressItems[i]));
         i++;
       } else {
-        timer.cancel();
-        _finishAnalysis();
+        t.cancel();
       }
     });
-  }
 
-  void _finishAnalysis() async {
-    if (!mounted) return;
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
+    try {
+      final goals = ref.read(healthGoalsProvider).map((g) => g.name).toList();
+      final analysis = await AnalysisRepository.instance.scan(
+        imagePath: imagePath,
+        goals: goals,
+      );
 
-    final analysis = MockFoodData.analysisHistory.first;
-    ref.read(analysisHistoryProvider.notifier).addAnalysis(analysis);
-    context.push(AppRoutes.analysisResult, extra: analysis);
+      progressTimer.cancel();
+      if (!mounted) return;
 
-    setState(() => _isScanning = false);
+      ref.read(analysisHistoryProvider.notifier).addAnalysis(analysis);
+      setState(() => _isScanning = false);
+      context.push(AppRoutes.analysisResult, extra: analysis);
+    } on AnalysisException catch (e) {
+      progressTimer.cancel();
+      debugPrint('[ScanPage] AnalysisException: ${e.message}');
+      if (!mounted) return;
+      setState(() => _isScanning = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
+      );
+    } catch (e, st) {
+      progressTimer.cancel();
+      debugPrint('[ScanPage] unexpected error: $e');
+      debugPrint('[ScanPage] stacktrace: $st');
+      if (!mounted) return;
+      setState(() => _isScanning = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('网络异常: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
   }
 
   @override
@@ -152,18 +130,8 @@ class _ScanPageState extends ConsumerState<ScanPage>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ── 真实相机预览 ──────────────────────────────────────────
-          if (_cameraReady && _cameraController != null)
-            Positioned.fill(
-              child: CameraPreview(_cameraController!),
-            )
-          else if (_cameraError != null)
-            Center(
-              child: Text(_cameraError!,
-                  style: const TextStyle(color: Colors.white)),
-            )
-          else
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
+          // ── 点击拍摄的引导背景 ─────────────────────────────────────
+          _CameraBackground(isScanning: _isScanning),
 
           // ── 顶部工具栏 ────────────────────────────────────────────
           SafeArea(

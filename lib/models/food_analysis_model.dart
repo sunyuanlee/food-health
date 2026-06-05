@@ -53,4 +53,25 @@ class FoodAnalysisModel {
     required this.additiveCount,
     required this.analyzedAt,
   });
+
+  factory FoodAnalysisModel.fromJson(Map<String, dynamic> json) {
+    return FoodAnalysisModel(
+      id: json['id'] as String,
+      productName: json['productName'] as String,
+      brand: json['brand'] as String?,
+      spec: json['spec'] as String?,
+      imageUrl: json['imageUrl'] as String?,
+      score: json['score'] as int,
+      scoreLevel: scoreToLevel(json['score'] as int),
+      tags: (json['tags'] as List<dynamic>).cast<String>(),
+      additiveCount: json['additiveCount'] as int,
+      analyzedAt: DateTime.parse(json['analyzedAt'] as String),
+      ingredients: (json['ingredients'] as List<dynamic>)
+          .map((e) => IngredientModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      goalFits: (json['goalFits'] as List<dynamic>)
+          .map((e) => GoalFitResult.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }

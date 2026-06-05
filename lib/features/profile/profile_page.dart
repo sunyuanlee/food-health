@@ -5,20 +5,35 @@ import '../../core/constants/app_colors.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/food_provider.dart';
 import '../../core/router/app_router.dart';
-import '../../core/data/mock_food_data.dart';
 import '../../models/ingredient_model.dart';
 
-class ProfilePage extends ConsumerWidget {
+class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends ConsumerState<ProfilePage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(analysisHistoryProvider.notifier).load();
+      ref.read(weeklyStatsProvider.notifier).load();
+      ref.read(healthGoalsProvider.notifier).load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final user = auth is AuthAuthenticated ? auth.user : null;
     final history = ref.watch(analysisHistoryProvider);
     final goals = ref.watch(healthGoalsProvider);
-    final weeklyCount = MockFoodData.weeklyCount;
-    final totalThisWeek = weeklyCount.fold(0, (a, b) => a + b);
+    final weeklyAsync = ref.watch(weeklyStatsProvider);
+    final totalThisWeek =
+        weeklyAsync.whenOrNull(data: (s) => s.total) ?? history.length;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,

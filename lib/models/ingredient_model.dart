@@ -58,6 +58,24 @@ class IngredientModel {
     required this.risk,
     this.riskReason,
   });
+
+  factory IngredientModel.fromJson(Map<String, dynamic> json) {
+    return IngredientModel(
+      name: json['name'] as String,
+      description: json['description'] as String,
+      risk: _riskFromString(json['risk'] as String),
+      riskReason: json['riskReason'] as String?,
+    );
+  }
+
+  static IngredientRisk _riskFromString(String s) {
+    switch (s) {
+      case 'safe':    return IngredientRisk.safe;
+      case 'caution': return IngredientRisk.caution;
+      case 'warning': return IngredientRisk.warning;
+      default:        return IngredientRisk.neutral;
+    }
+  }
 }
 
 /// 目标适合度评估
@@ -72,6 +90,29 @@ class GoalFitResult {
     required this.level,
     required this.reason,
   });
+
+  factory GoalFitResult.fromJson(Map<String, dynamic> json) {
+    return GoalFitResult(
+      goal: _goalFromString(json['goal'] as String),
+      level: _levelFromString(json['level'] as String),
+      reason: json['reason'] as String,
+    );
+  }
+
+  static HealthGoalType _goalFromString(String s) {
+    return HealthGoalType.values.firstWhere(
+      (e) => e.name == s,
+      orElse: () => HealthGoalType.lowSugar,
+    );
+  }
+
+  static GoalFitLevel _levelFromString(String s) {
+    switch (s) {
+      case 'suitable': return GoalFitLevel.suitable;
+      case 'caution':  return GoalFitLevel.caution;
+      default:         return GoalFitLevel.general;
+    }
+  }
 }
 
 enum GoalFitLevel {

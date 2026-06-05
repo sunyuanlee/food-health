@@ -16,8 +16,8 @@ class ApiClient {
       baseUrl: ApiConfig.baseUrl,
       connectTimeout: ApiConfig.connectTimeout,
       receiveTimeout: ApiConfig.receiveTimeout,
+      contentType: 'application/json',  // 仅作默认值，FormData 会自动覆盖为 multipart
       headers: {
-        'Content-Type': 'application/json',
         // ngrok 免费版会对非浏览器请求插入警告页，加此头绕过
         'ngrok-skip-browser-warning': 'true',
       },

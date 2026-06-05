@@ -5,17 +5,44 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/providers/food_provider.dart';
 import '../../core/router/app_router.dart';
-import '../../core/data/mock_food_data.dart';
 import '../../models/food_analysis_model.dart';
 
-class RecordsPage extends ConsumerWidget {
+class RecordsPage extends ConsumerStatefulWidget {
   const RecordsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecordsPage> createState() => _RecordsPageState();
+}
+
+class _RecordsPageState extends ConsumerState<RecordsPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(analysisHistoryProvider.notifier).load();
+      ref.read(weeklyStatsProvider.notifier).load();
+    });
+  }
+
+  Future<void> _onRefresh() async {
+    await Future.wait([
+      ref.read(analysisHistoryProvider.notifier).refresh(),
+      ref.read(weeklyStatsProvider.notifier).load(),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final history = ref.watch(analysisHistoryProvider);
-    final weeklyCount = MockFoodData.weeklyCount;
-    final totalThisWeek = weeklyCount.fold(0, (a, b) => a + b);
+    final weeklyAsync = ref.watch(weeklyStatsProvider);
+
+    // 提炼统计数据（API 返回或默认 0）
+    final weeklyCount = weeklyAsync.whenOrNull(
+          data: (s) => s.days.map((d) => d.count).toList(),
+        ) ??
+        List.filled(7, 0);
+    final totalThisWeek =
+        weeklyAsync.whenOrNull(data: (s) => s.total) ?? 0;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
@@ -26,12 +53,14 @@ class RecordsPage extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {},
+            icon: const Icon(Icons.refresh),
+            onPressed: _onRefresh,
           ),
         ],
       ),
-      body: CustomScrollView(
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: CustomScrollView(
         slivers: [
           // ── 本周统计 ──────────────────────────────────────────────
           SliverToBoxAdapter(
@@ -96,6 +125,7 @@ class RecordsPage extends ConsumerWidget {
 
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
+      ),
       ),
     );
   }
